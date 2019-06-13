@@ -105,7 +105,7 @@ def main():
     station = NetatmoWeatherStation(config)
 
     with Hermes(MQTT_ADDR) as h:
-        h.subscribe_intent("JasperJuergensen:WeatherOutdoor", weatherOutdoor).loop_forever()
+        h.subscribe_intent("JasperJuergensen:OutdoorWeather", weatherOutdoor).loop_forever()
 
 
 if __name__ == "__main__":  
