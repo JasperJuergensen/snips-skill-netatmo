@@ -30,8 +30,8 @@ class NetatmoWeatherStation:
         self.weather_data_url = api_config.get('NetatmoAccount', 'weather_data_url')
         self.refresh_url = api_config.get('NetatmoAccount', 'refresh_url')
         self.token = self.get_access_token()
-        self.last_request = None
-        self.cached_weather_data = None
+        # self.last_request = None
+        # self.cached_weather_data = None
 
     def get_access_token(self):
         oauth = OAuth2Session(client=LegacyApplicationClient(client_id=self.client_id))
@@ -43,10 +43,10 @@ class NetatmoWeatherStation:
     @property
     def weather_data(self):
 
-        if cached_weather_data is not None and \
-        last_request is not None and \
-        (datetime.datetime.utcnow() - datetime.datetime.utcfromtimestamp(self.last_request)) < datetime.timedelta(minutes=3):
-            return self.cached_weather_data
+        # if cached_weather_data is not None and \
+        # last_request is not None and \
+        # (datetime.datetime.utcnow() - datetime.datetime.utcfromtimestamp(self.last_request)) < datetime.timedelta(minutes=3):
+        #     return self.cached_weather_data
 
         params = dict(device_id=self.device_id)
 
@@ -69,8 +69,8 @@ class NetatmoWeatherStation:
             raise WeatherParserException('Die API hat nicht den Status ok zurückgegeben.')
 
         data = self.parse_response(response_data['body'])
-        self.cached_weather_data = data
-        self.last_request = response_data['body']['devices'][0]['dashboard_data']['time_utc']
+        # self.cached_weather_data = data
+        # self.last_request = response_data['body']['devices'][0]['dashboard_data']['time_utc']
 
         return data
 
