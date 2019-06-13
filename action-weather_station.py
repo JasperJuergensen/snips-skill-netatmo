@@ -43,10 +43,10 @@ class NetatmoWeatherStation:
     @property
     def weather_data(self):
 
-        # if cached_weather_data is not None and \
-        # last_request is not None and \
-        # (datetime.datetime.utcnow() - datetime.datetime.utcfromtimestamp(self.last_request)) < datetime.timedelta(minutes=3):
-        #     return self.cached_weather_data
+        if cached_weather_data is not None and \
+        last_request is not None and \
+        (datetime.datetime.utcnow() - datetime.datetime.utcfromtimestamp(self.last_request)) < datetime.timedelta(minutes=3):
+            return self.cached_weather_data
 
         params = dict(device_id=self.device_id)
 
@@ -70,7 +70,7 @@ class NetatmoWeatherStation:
 
         data = self.parse_response(response_data['body'])
         self.cached_weather_data = data
-        self.last_request = response_data['body']['dashboard_data']['time_utc']
+        self.last_request = response_data['body']['devices'][0]['dashboard_data']['time_utc']
 
         return data
 
