@@ -87,9 +87,9 @@ def weatherOutdoor(hermes, intentMessage):
     weather_type = intentMessage.slots.weather_type.first().value
     try:
         if weather_type == 'Temperatur':
-            text = 'Die Außentemperatur beträgt {} Grad Celsius.'.format(station.temperature)
+            text = 'Die Außentemperatur beträgt {} Grad Celsius.'.format(str(station.temperature).replace('.', ','))
         elif weather_type == 'Luftfeuchtigkeit':
-            text = 'Die Luftfeuchtigkeit liegt bei {} Prozent.'.format(station.humidity)
+            text = 'Die Luftfeuchtigkeit liegt bei {} Prozent.'.format(str(station.humidity).replace('.', ','))
         else:
             text = 'Ich habe dich leider nicht verstanden'
     except WeatherParserException as e:
