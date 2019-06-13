@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from hermes_python.hermes import Hermes
 
 import requests
