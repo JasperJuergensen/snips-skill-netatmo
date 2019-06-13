@@ -2,3 +2,4 @@ requests
 oauthlib
 requests-oauthlib
 hermes_python
+mqtthandler

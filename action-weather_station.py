@@ -9,7 +9,22 @@ from requests_oauthlib import OAuth2Session
 import configparser
 import datetime
 
+import mqtthandler
+import logging
+
 station = None
+
+# get config
+config = configparser.ConfigParser()
+config.read("config.cfg")
+
+# set up logging
+mqtthdlr = mqtthandler.MQTTHandler(config.get('MQTT', 'ip'), config.get('Logging', 'topic'))
+mqtthdlr.setLevel(logging.DEBUG)
+
+logger = logging.getLogger()
+logger.addHandler(mqtthdlr)
+logger.setLevel(config.get('Logging', 'level'))
 
 
 class WeatherParserException(Exception):
@@ -30,8 +45,8 @@ class NetatmoWeatherStation:
         self.weather_data_url = api_config.get('NetatmoAccount', 'weather_data_url')
         self.refresh_url = api_config.get('NetatmoAccount', 'refresh_url')
         self.token = self.get_access_token()
-        # self.last_request = None
-        # self.cached_weather_data = None
+        self.last_request = None
+        self.cached_weather_data = None
 
     def get_access_token(self):
         oauth = OAuth2Session(client=LegacyApplicationClient(client_id=self.client_id))
@@ -40,43 +55,57 @@ class NetatmoWeatherStation:
             client_secret=self.client_secret, scope=self.scope)
         return token
 
+    def token_saver(self, token):
+        self.token = token
+
     @property
     def weather_data(self):
 
-        # if cached_weather_data is not None and \
-        # last_request is not None and \
-        # (datetime.datetime.utcnow() - datetime.datetime.utcfromtimestamp(self.last_request)) < datetime.timedelta(minutes=3):
-        #     return self.cached_weather_data
+        if self.cached_weather_data is not None and \
+        self.last_request is not None and \
+        (datetime.datetime.utcnow() - datetime.datetime.utcfromtimestamp(self.last_request)) < datetime.timedelta(minutes=3):
+            logger.debug('Read weather data from cache')
+            return self.cached_weather_data
 
         params = dict(device_id=self.device_id)
 
+        if datetime.datetime.fromtimestamp(self.token['expires_at']) < datetime.datetime.now():
+            logger.debug('Token expired')
+            self.token['expires_in'] = -30
+            self.token['expire_in'] = -30
+
         try:
-            client = OAuth2Session(self.client_id, token=self.token)
+            logger.debug('Request weather data from API')
+            client = OAuth2Session(self.client_id, token=self.token, 
+                auto_refresh_url=self.refresh_url, 
+                auto_refresh_kwargs={'client_id': self.client_id, 'client_secret': self.client_secret}, 
+                token_updater=self.token_saver)
             response = client.get(self.weather_data_url, params=params)
-        except TokenExpiredError as e:
-            self.token = client.refresh_token(self.refresh_url, grant_type='refresh_token')
-            client = OAuth2Session(self.client_id, token=self.token)
-            response = client.get(self.weather_data_url, params=params)
-        except:
+        except Exception as e:
+            logger.warning('Requesting data from API returns error: {}'.format(repr(e)))
             raise WeatherParserException('Die API ist aktuell nicht erreichbar.')
 
         if response.status_code != requests.codes.ok:
+            logger.info('The API returned HTTP {}'.format(response_data.status_code))
             raise WeatherParserException('Die API hat einen HTTP Status {} zurückgegeben.'.format(response.status_code))
 
         response_data = response.json()
 
         if response_data['status'] != 'ok':
+            logger.info('The API returned "{}" as status'.format(response_data['status']))
             raise WeatherParserException('Die API hat nicht den Status ok zurückgegeben.')
 
         data = self.parse_response(response_data['body'])
-        # self.cached_weather_data = data
-        # self.last_request = response_data['body']['devices'][0]['dashboard_data']['time_utc']
+        self.cached_weather_data = data
+        self.last_request = response_data['body']['devices'][0]['dashboard_data']['time_utc']
+        logger.debug('Updated cache time to {}'.format(str(self.last_request)))
 
         return data
 
     def parse_response(self, data):
         weather_data = None
         if len(data['devices']) != 1:
+            logger.warning('Found {} devices'.format(len(data['devices'])))
             raise WeatherParserException('Es wurde mehr als ein oder gar kein Gerät gefunden.')
 
         device = data['devices'][0]
@@ -85,6 +114,7 @@ class NetatmoWeatherStation:
             if module['type'] == 'NAModule1':  # Outdoor module
                 weather_data = module['dashboard_data']
         if weather_data is None:
+            logger.warning('Outdoor module not found')
             raise WeatherParserException('Es wurde kein Außenmodul gefunden.')
 
         weather_data['Pressure'] = device['dashboard_data']['Pressure']
@@ -116,22 +146,22 @@ def weatherOutdoor(hermes, intentMessage):
             text = 'Der Luftdruck beträgt aktuell {} Millibar'.format(str(station.pressure).replace('.', ','))
         else:
             text = 'Ich habe dich leider nicht verstanden'
+            logger.info('Request could not be understood')
     except WeatherParserException as e:
         text = e.message
-    except:
+    except Exception as e:
+        logger.error('An exception occured: {}'.format(repr(e)))
         text = 'Es ist leider ein Fehler aufgetreten.'
     hermes.publish_end_session(intentMessage.session_id, text)
 
 
 def main():
-    config = configparser.ConfigParser()
-    config.read("config.cfg")
-
     MQTT_ADDR = "{}:{}".format(config.get('MQTT', 'ip'), str(config.get('MQTT', 'port')))
 
     global station
     station = NetatmoWeatherStation(config)
 
+    logger.debug('Start listening on {}'.format(MQTT_ADDR))
     with Hermes(MQTT_ADDR) as h:
         h.subscribe_intent("JasperJuergensen:OutdoorWeather", weatherOutdoor).loop_forever()
 
