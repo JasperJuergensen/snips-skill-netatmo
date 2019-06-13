@@ -84,7 +84,7 @@ class NetatmoWeatherStation:
 
 def weatherOutdoor(hermes, intentMessage):
     global station
-    weather_type = intentMessage.slots.weather_type.first()
+    weather_type = intentMessage.slots.weather_type.first().value
     try:
         if weather_type == 'Temperatur':
             text = 'Die Außentemperatur beträgt {} Grad Celsius.'.format(station.temperature)
