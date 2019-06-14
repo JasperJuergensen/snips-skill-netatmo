@@ -181,7 +181,7 @@ def main():
     station = NetatmoWeatherStation(config)
 
     logger.debug('Start listening on {}'.format(MQTT_BROKER_ADDRESS))
-    with Hermes(mqtt_opts) as h:
+    with Hermes(mqtt_options=mqtt_opts) as h:
         h.subscribe_intent("JasperJuergensen:OutdoorWeather", weatherOutdoor).loop_forever()
 
 
