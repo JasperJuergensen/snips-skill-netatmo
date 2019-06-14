@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 
 from hermes_python.hermes import Hermes
+from hermes_python.ffi.utils import MqttOptions
 
 import requests
 from oauthlib.oauth2 import LegacyApplicationClient, TokenExpiredError
 from requests_oauthlib import OAuth2Session
 
 import configparser
+import toml
+
 import datetime
 
 import mqtthandler
@@ -14,13 +17,28 @@ import logging
 
 station = None
 
-# get config
+MQTT_BROKER_ADDRESS = "localhost:1883"
+MQTT_USERNAME = None
+MQTT_PASSWORD = None
+
+# get snips config
+snips_config = toml.load('/etc/snips.toml')
+if 'mqtt' in snips_config['snips-common'].keys():
+    MQTT_BROKER_ADDRESS = snips_config['snips-common']['mqtt']
+if 'mqtt_username' in snips_config['snips-common'].keys():
+    MQTT_USERNAME = snips_config['snips-common']['mqtt_username']
+if 'mqtt_password' in snips_config['snips-common'].keys():
+    MQTT_PASSWORD = snips_config['snips-common']['mqtt_password']
+
+# get app specific config
 config = configparser.ConfigParser()
 config.read("config.cfg")
 
 # set up logging
-mqtthdlr = mqtthandler.MQTTHandler(config.get('MQTT', 'ip'), config.get('Logging', 'topic'))
+mqtthdlr = mqtthandler.MQTTHandler(MQTT_BROKER_ADDRESS.split(':')[0], config.get('Logging', 'topic'))
 mqtthdlr.setLevel(logging.DEBUG)
+if MQTT_USERNAME and MQTT_PASSWORD:
+    mqtthdlr.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
 
 logger = logging.getLogger()
 logger.addHandler(mqtthdlr)
@@ -53,6 +71,7 @@ class NetatmoWeatherStation:
         token = oauth.fetch_token(token_url=self.auth_url,
             username=self.username, password=self.password, client_id=self.client_id, 
             client_secret=self.client_secret, scope=self.scope)
+        self.password = None
         return token
 
     def token_saver(self, token):
@@ -156,13 +175,13 @@ def weatherOutdoor(hermes, intentMessage):
 
 
 def main():
-    MQTT_ADDR = "{}:{}".format(config.get('MQTT', 'ip'), str(config.get('MQTT', 'port')))
+    mqtt_opts = MqttOptions(username=MQTT_USERNAME, password=MQTT_PASSWORD, broker_address=MQTT_BROKER_ADDRESS)
 
     global station
     station = NetatmoWeatherStation(config)
 
-    logger.debug('Start listening on {}'.format(MQTT_ADDR))
-    with Hermes(MQTT_ADDR) as h:
+    logger.debug('Start listening on {}'.format(MQTT_BROKER_ADDRESS))
+    with Hermes(mqtt_opts) as h:
         h.subscribe_intent("JasperJuergensen:OutdoorWeather", weatherOutdoor).loop_forever()
 
 
